@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🔒 Face Security Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: monospace; background: #0d0d0d; color: #e0e0e0; padding: 20px; }
+    h1 { color: #00ff88; margin-bottom: 20px; font-size: 1.4em; letter-spacing: 2px; }
+    h2 { color: #888; font-size: 0.9em; margin-bottom: 10px; letter-spacing: 1px; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+
+    .card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    /* Snapshots */
+    #snapshots { display: flex; gap: 10px; flex-wrap: wrap; }
+    .snapshot-box { flex: 1; min-width: 200px; }
+    .snapshot-box img {
+      width: 100%; border-radius: 6px; border: 1px solid #333;
+      background: #111;
+    }
+    .cam-label { font-size: 0.75em; color: #555; margin-bottom: 4px; }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; font-size: 0.78em; }
+    th { color: #555; text-align: left; padding: 6px 8px; border-bottom: 1px solid #222; }
+    td { padding: 6px 8px; border-bottom: 1px solid #1e1e1e; }
+    tr:hover td { background: #1f1f1f; }
+    .name-known   { color: #00ff88; }
+    .name-unknown { color: #ff4444; }
+
+    .dot {
+      display: inline-block; width: 8px; height: 8px;
+      border-radius: 50%; background: #00ff88;
+      margin-right: 6px; animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+    }
+    .status-bar {
+      font-size: 0.75em; color: #444;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔒 Face Security Dashboard</h1>
+  <div class="status-bar"><span class="dot"></span>Live — refreshes every 3s</div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>📷 LIVE SNAPSHOTS</h2>
+      <div id="snapshots"><em style="color:#444">Waiting for detections...</em></div>
+    </div>
+
+    <div class="card">
+      <h2>📋 RECENT DETECTIONS</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Cam</th>
+            <th>Faces</th>
+            <th>Detected</th>
+          </tr>
+        </thead>
+        <tbody id="detections-body">
+          <tr><td colspan="4" style="color:#444">No data yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let knownCameras = new Set();
+
+    function refreshSnapshots() {
+      const container = document.getElementById("snapshots");
+      if (knownCameras.size === 0) return;
+      container.innerHTML = "";
+      knownCameras.forEach(function(cam) {
+        const box = document.createElement("div");
+        box.className = "snapshot-box";
+        box.innerHTML =
+          '<div class="cam-label">Camera ' + cam + '</div>' +
+          '<img src="/api/snapshot/' + cam + '?t=' + Date.now() + '" alt="cam ' + cam + '">';
+        container.appendChild(box);
+      });
+    }
+
+    function refreshDetections() {
+      fetch("/api/detections")
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          const tbody = document.getElementById("detections-body");
+          if (!data.length) return;
+          tbody.innerHTML = "";
+          data.forEach(function(d) {
+            knownCameras.add(d.camera_id);
+            const isKnown = d.names && d.names !== "Unknown";
+            const nameClass = isKnown ? "name-known" : "name-unknown";
+            const tr = document.createElement("tr");
+            tr.innerHTML =
+              "<td>" + d.timestamp.slice(11) + "</td>" +
+              "<td>" + d.camera_id + "</td>" +
+              "<td>" + d.face_count + "</td>" +
+              '<td class="' + nameClass + '">' + (d.names || "Unknown") + "</td>";
+            tbody.appendChild(tr);
+          });
+          refreshSnapshots();
+        })
+        .catch(function() {});
+    }
+
+    refreshDetections();
+    setInterval(refreshDetections, 3000);
+  </script>
+</body>
+</html>
